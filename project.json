@@ -1,0 +1,76 @@
+{
+  "project": {
+    "name": "CDN Cache Hit Indicator",
+    "type": "Software-Only AWS Simulation",
+    "description": "A web dashboard that simulates CDN cache HIT and MISS events.",
+    "hardware_required": false,
+    "cloud_provider": "AWS",
+    "region": "us-east-1"
+  },
+  "architecture": {
+    "flow": [
+      "Dashboard hosted on Amazon S3",
+      "Browser sends POST request to AWS Lambda Function URL",
+      "Lambda processes simulated HIT or MISS event",
+      "Lambda writes latest event to S3 status.json",
+      "Dashboard updates browser-local counters and history"
+    ],
+    "services": [
+      "Amazon S3",
+      "AWS Lambda",
+      "Lambda Function URL"
+    ]
+  },
+  "aws_resources": {
+    "s3": {
+      "bucket_name": "REPLACE-WITH-YOUR-GLOBALLY-UNIQUE-BUCKET-NAME",
+      "region": "us-east-1",
+      "static_website_hosting": true,
+      "index_document": "index.html",
+      "error_document": "index.html"
+    },
+    "lambda": {
+      "function_name": "CDNCacheIndicatorFunction",
+      "runtime": "Python 3.12",
+      "handler": "lambda_function.lambda_handler",
+      "environment_variables": {
+        "BUCKET_NAME": "REPLACE-WITH-YOUR-GLOBALLY-UNIQUE-BUCKET-NAME",
+        "STATUS_KEY": "status.json"
+      },
+      "function_url_auth": "NONE - public demo endpoint; restrict or disable after demo",
+      "cors": {
+        "allowed_methods": [
+          "POST"
+        ],
+        "allowed_headers": [
+          "content-type"
+        ],
+        "allowed_origins": [
+          "REPLACE-WITH-EXACT-S3-WEBSITE-ORIGIN"
+        ]
+      },
+      "iam_permissions": [
+        "s3:PutObject on arn:aws:s3:::YOUR-BUCKET-NAME/status.json"
+      ]
+    }
+  },
+  "dashboard": {
+    "file": "index.html",
+    "statistics_storage": "Browser localStorage",
+    "features": [
+      "Simulate Cache HIT",
+      "Simulate Cache MISS",
+      "Current cache status",
+      "HIT and MISS counters",
+      "Cache hit rate",
+      "Recent event history",
+      "Last updated timestamp",
+      "Responsive dark dashboard"
+    ]
+  },
+  "limitations": [
+    "This is a simulation, not real CloudFront cache monitoring.",
+    "S3 stores only the latest event.",
+    "Counters and history are browser-specific."
+  ]
+}

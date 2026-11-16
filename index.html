@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CDN Cache Hit Indicator</title>
+  <style>
+    :root { color-scheme: dark; --bg:#0b1020; --panel:#121a2d; --muted:#9aa8c2; --line:#26334d; --green:#22c55e; --red:#ef4444; --blue:#60a5fa; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; font-family:Inter,Segoe UI,Arial,sans-serif; background:radial-gradient(circle at top left,#182849 0,#0b1020 42%); color:#edf3ff; }
+    .wrap { width:min(1100px,92%); margin:0 auto; padding:38px 0 55px; }
+    header { display:flex; justify-content:space-between; align-items:center; gap:18px; margin-bottom:30px; }
+    .eyebrow { color:var(--blue); font-size:12px; letter-spacing:2px; text-transform:uppercase; font-weight:700; }
+    h1 { margin:8px 0; font-size:clamp(27px,5vw,42px); }
+    .sub { color:var(--muted); margin:0; line-height:1.6; }
+    .pill { border:1px solid var(--line); background:#111a2d; padding:9px 13px; border-radius:30px; color:#c7d4ec; font-size:12px; white-space:nowrap; }
+    .grid { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin:22px 0; }
+    .card { background:linear-gradient(145deg,rgba(22,33,56,.96),rgba(15,23,40,.96)); border:1px solid var(--line); border-radius:17px; padding:20px; box-shadow:0 12px 30px #0002; }
+    .metric-label { color:var(--muted); font-size:13px; }
+    .metric { font-size:34px; font-weight:750; margin-top:10px; }
+    .metric.green { color:var(--green); } .metric.red { color:var(--red); } .metric.blue { color:var(--blue); }
+    .main { display:grid; grid-template-columns:1.1fr .9fr; gap:16px; }
+    h2 { margin:0 0 8px; font-size:19px; }
+    .muted { color:var(--muted); font-size:13px; line-height:1.55; }
+    .actions { display:flex; flex-wrap:wrap; gap:12px; margin:22px 0; }
+    button { border:0; border-radius:11px; padding:13px 18px; color:white; font-weight:700; cursor:pointer; font-size:14px; transition:.15s; }
+    button:hover { transform:translateY(-2px); filter:brightness(1.1); }
+    button:disabled { opacity:.55; cursor:wait; transform:none; }
+    .hit-btn { background:#15803d; } .miss-btn { background:#b91c1c; } .reset-btn { background:#334155; }
+    .status { display:flex; align-items:center; gap:12px; padding:16px; background:#0b1425; border:1px solid var(--line); border-radius:13px; margin-top:12px; }
+    .dot { width:12px; height:12px; border-radius:50%; background:#64748b; box-shadow:0 0 14px currentColor; flex:none; }
+    .dot.hit { background:var(--green); color:var(--green); } .dot.miss { background:var(--red); color:var(--red); }
+    .status strong { display:block; font-size:16px; margin-bottom:4px; }
+    .history { width:100%; border-collapse:collapse; margin-top:12px; font-size:13px; }
+    .history th,.history td { text-align:left; padding:12px 8px; border-bottom:1px solid var(--line); }
+    .history th { color:var(--muted); font-weight:600; }
+    .tag { font-weight:700; } .tag.hit { color:var(--green); } .tag.miss { color:var(--red); }
+    .bar { height:9px; background:#26334d; border-radius:20px; overflow:hidden; margin-top:14px; }
+    .bar > div { height:100%; width:0%; background:linear-gradient(90deg,#16a34a,#4ade80); transition:width .25s; }
+    .notice { margin-top:16px; padding:12px 14px; border-radius:10px; background:#17243b; color:#c5d3eb; font-size:12px; line-height:1.55; }
+    .error { color:#fca5a5; } .success { color:#86efac; }
+    footer { color:#71809d; font-size:12px; text-align:center; margin-top:25px; }
+    @media(max-width:760px) { header { align-items:flex-start; flex-direction:column; } .grid { grid-template-columns:1fr; } .main { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <div class="eyebrow">AWS Cloud Demonstration</div>
+        <h1>CDN Cache Hit Indicator</h1>
+        <p class="sub">Explore how cached content can be served quickly and cache misses fetch content from an origin.</p>
+      </div>
+      <div class="pill">SOFTWARE-ONLY SIMULATION</div>
+    </header>
+
+    <section class="grid">
+      <div class="card"><div class="metric-label">Total Cache HITs</div><div class="metric green" id="hits">0</div></div>
+      <div class="card"><div class="metric-label">Total Cache MISSes</div><div class="metric red" id="misses">0</div></div>
+      <div class="card"><div class="metric-label">Cache Hit Rate</div><div class="metric blue" id="rate">0.0%</div><div class="bar"><div id="rateBar"></div></div></div>
+    </section>
+
+    <section class="main">
+      <div class="card">
+        <h2>Simulate a CDN request</h2>
+        <p class="muted">Choose what happens when a user requests content. The event is sent to AWS Lambda and the latest event is saved in Amazon S3.</p>
+        <div class="actions">
+          <button class="hit-btn" id="hitBtn" onclick="simulate('cache_hit')">✓ Simulate Cache HIT</button>
+          <button class="miss-btn" id="missBtn" onclick="simulate('cache_miss')">↗ Simulate Cache MISS</button>
+        </div>
+        <div class="status">
+          <span class="dot" id="statusDot"></span>
+          <div><strong id="statusText">WAITING FOR FIRST EVENT</strong><div class="muted" id="statusMessage">Click either button to simulate a cache event.</div></div>
+        </div>
+        <div class="notice" id="connectionNote">Setup required: paste your Lambda Function URL into the API URL setting in this file before testing the buttons.</div>
+        <p class="muted" style="margin-top:14px">Last updated: <span id="updated">Not yet updated</span></p>
+      </div>
+
+      <div class="card">
+        <h2>Recent event history</h2>
+        <p class="muted">History and counters are stored in this browser using localStorage.</p>
+        <table class="history">
+          <thead><tr><th>Event</th><th>Result</th><th>Time</th></tr></thead>
+          <tbody id="history"><tr><td colspan="3" class="muted">No events yet.</td></tr></tbody>
+        </table>
+        <div class="actions"><button class="reset-btn" onclick="resetStats()">Reset browser statistics</button></div>
+      </div>
+    </section>
+    <footer>CDN Cache Hit Indicator · Amazon S3 + AWS Lambda · Educational simulation only</footer>
+  </div>
+
+<script>
+  // After creating your Lambda Function URL, paste it between the quotes below.
+  const API_URL = "https://4sbwt6imlazcwchjtrkfidj4uy0pdoox.lambda-url.us-east-1.on.aws/";
+
+  const STORAGE_KEY = "cdnCacheIndicatorStats_v1";
+  let stats = loadStats();
+
+  function loadStats() {
+    try {
+      return JSON.parse(localStorage.getItem(STORAGE_KEY)) || { hits: 0, misses: 0, history: [], latest: null };
+    } catch (_) {
+      return { hits: 0, misses: 0, history: [], latest: null };
+    }
+  }
+  function saveStats() { localStorage.setItem(STORAGE_KEY, JSON.stringify(stats)); }
+  function formatTime(value) {
+    const d = new Date(value);
+    return isNaN(d.getTime()) ? "Unknown" : d.toLocaleString();
+  }
+  function render() {
+    const total = stats.hits + stats.misses;
+    const rate = total ? (stats.hits / total) * 100 : 0;
+    document.getElementById("hits").textContent = stats.hits;
+    document.getElementById("misses").textContent = stats.misses;
+    document.getElementById("rate").textContent = rate.toFixed(1) + "%";
+    document.getElementById("rateBar").style.width = rate + "%";
+    const body = document.getElementById("history");
+    body.innerHTML = "";
+    if (!stats.history.length) {
+      body.innerHTML = '<tr><td colspan="3" class="muted">No events yet.</td></tr>';
+    } else {
+      stats.history.slice(0, 8).forEach(item => {
+        const tr = document.createElement("tr");
+        const event = document.createElement("td");
+        const result = document.createElement("td");
+        const time = document.createElement("td");
+        event.textContent = item.status === "CACHE_HIT" ? "Cache HIT" : "Cache MISS";
+        result.textContent = item.status;
+        result.className = "tag " + (item.status === "CACHE_HIT" ? "hit" : "miss");
+        time.textContent = formatTime(item.updated_at);
+        tr.append(event, result, time);
+        body.appendChild(tr);
+      });
+    }
+    if (stats.latest) showStatus(stats.latest);
+  }
+  function showStatus(data) {
+    const isHit = data.status === "CACHE_HIT";
+    document.getElementById("statusDot").className = "dot " + (isHit ? "hit" : "miss");
+    document.getElementById("statusText").textContent = data.status || "UNKNOWN";
+    document.getElementById("statusMessage").textContent = data.message || "";
+    document.getElementById("updated").textContent = formatTime(data.updated_at);
+  }
+  async function simulate(action) {
+    const note = document.getElementById("connectionNote");
+    if (!API_URL || API_URL.includes("PASTE_YOUR_LAMBDA")) {
+      note.innerHTML = '<span class="error">Lambda URL is not configured yet.</span> Open index.html, replace API_URL with your deployed Lambda Function URL, save and upload the file to S3 again.';
+      return;
+    }
+    const buttons = [document.getElementById("hitBtn"), document.getElementById("missBtn")];
+    buttons.forEach(b => b.disabled = true);
+    note.textContent = "Sending event to AWS Lambda…";
+    try {
+      const response = await fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || ("Request failed: " + response.status));
+      if (data.status === "CACHE_HIT") stats.hits++;
+      else if (data.status === "CACHE_MISS") stats.misses++;
+      else throw new Error("Unexpected response from Lambda.");
+      stats.latest = data;
+      stats.history.unshift(data);
+      stats.history = stats.history.slice(0, 30);
+      saveStats();
+      render();
+      note.innerHTML = '<span class="success">Success:</span> Lambda processed the event and saved the latest status to S3.';
+    } catch (error) {
+      note.innerHTML = '<span class="error">Request failed:</span> ' + escapeHtml(error.message) + ' Check the Function URL, CORS settings and Lambda permissions.';
+    } finally {
+      buttons.forEach(b => b.disabled = false);
+    }
+  }
+  function escapeHtml(value) {
+    return String(value).replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+  }
+  function resetStats() {
+    if (!confirm("Clear counters and recent history in this browser? This does not delete the S3 status.json object.")) return;
+    stats = { hits: 0, misses: 0, history: [], latest: null };
+    saveStats();
+    document.getElementById("statusDot").className = "dot";
+    document.getElementById("statusText").textContent = "WAITING FOR FIRST EVENT";
+    document.getElementById("statusMessage").textContent = "Click either button to simulate a cache event.";
+    document.getElementById("updated").textContent = "Not yet updated";
+    render();
+  }
+  render();
+</script>
+</body>
+</html>
